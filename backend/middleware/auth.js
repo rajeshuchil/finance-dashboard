@@ -44,7 +44,7 @@ const authenticateRequest = async (req, res, next) => {
 
 /**
  * Role-based access control (RBAC) middleware.
- * Must be used sequentially AFTER `protect` so that `req.user` is available.
+ * Must be used after `authenticateRequest` so `req.user` is available.
  */
 const requireRoles = (...allowedRoles) => {
   return (req, res, next) => {
@@ -64,16 +64,11 @@ const requireAdmin = requireRoles(ROLES.ADMIN);
 const requireAnalystOrAdmin = requireRoles(ROLES.ANALYST, ROLES.ADMIN);
 const requireViewerOrAbove = requireRoles(ROLES.VIEWER, ROLES.ANALYST, ROLES.ADMIN);
 
-const protect = authenticateRequest;
-const authorize = requireRoles;
-
 module.exports = {
   authenticateRequest,
   requireRoles,
   requireAdmin,
   requireAnalystOrAdmin,
   requireViewerOrAbove,
-  ROLES,
-  protect,
-  authorize
+  ROLES
 };
