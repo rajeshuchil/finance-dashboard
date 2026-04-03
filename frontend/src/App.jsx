@@ -19,11 +19,13 @@ export default function App() {
       <div className="app-layout">
         <Sidebar />
         <main className="app-main">
-          <Routes>
-            <Route path="/" element={<Dashboard />} />
-            <Route path="/records" element={<Records />} />
-            <Route path="/summary" element={<Summary />} />
-          </Routes>
+          <div className="content-container">
+            <Routes>
+              <Route path="/" element={<Dashboard />} />
+              <Route path="/records" element={<Records />} />
+              <Route path="/summary" element={<Summary />} />
+            </Routes>
+          </div>
         </main>
       </div>
     </BrowserRouter>
