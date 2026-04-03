@@ -4,79 +4,65 @@ const ApiError = require('../utils/ApiError');
 const { generateToken } = require('../utils/jwt');
 const asyncHandler = require('../utils/asyncHandler');
 
-const authResponse = (user) => {
-  return {
-    token: generateToken(user),
-    user: {
-      id: user._id,
-      name: user.name,
-      email: user.email,
-      role: user.role,
-      status: user.status
-    }
-  };
-};
+const authResponse = (user) => ({
+  token: generateToken(user),
+  user: {
+    id: user._id,
+    name: user.name,
+    email: user.email,
+    role: user.role,
+    status: user.status
+  }
+});
 
 const registerValidation = [
   body('name')
     .trim()
-    .notEmpty()
-    .withMessage('Name is required')
-    .isLength({ min: 2, max: 100 })
-    .withMessage('Name must be between 2 and 100 characters'),
+    .notEmpty().withMessage('Name is required')
+    .isLength({ min: 2, max: 100 }).withMessage('Name must be between 2 and 100 characters'),
   body('email')
     .trim()
-    .notEmpty()
-    .withMessage('Email is required')
-    .isEmail()
-    .withMessage('Enter a valid email address')
-    .normalizeEmail(),
+    .toLowerCase()
+    .notEmpty().withMessage('Email is required')
+    .isEmail().withMessage('Enter a valid email address'),
   body('password')
-    .notEmpty()
-    .withMessage('Password is required')
-    .isStrongPassword({
-      minLength: 8,
-      minLowercase: 1,
-      minUppercase: 1,
-      minNumbers: 1,
-      minSymbols: 1
-    })
-    .withMessage('Password must be at least 8 chars and include upper, lower, number, and symbol'),
+    .notEmpty().withMessage('Password is required')
+    .isLength({ min: 6 }).withMessage('Password must be at least 6 characters'),
+  // Prevent clients from self-assigning a role at registration
   body('role')
-    .not()
-    .exists()
+    .not().exists()
     .withMessage('Role cannot be set during registration')
 ];
 
 const loginValidation = [
   body('email')
     .trim()
-    .notEmpty()
-    .withMessage('Email is required')
-    .isEmail()
-    .withMessage('Enter a valid email address')
-    .normalizeEmail(),
+    .toLowerCase()
+    .notEmpty().withMessage('Email is required')
+    .isEmail().withMessage('Enter a valid email address'),
   body('password').notEmpty().withMessage('Password is required')
 ];
 
 const register = asyncHandler(async (req, res) => {
+  console.log('Register Request Body:', req.body);
   const { name, email, password } = req.body;
 
-  const existingUser = await User.findOne({ email });
-  if (existingUser) {
-    throw new ApiError(409, 'Email already in use');
-  }
+  // Role defaults to 'viewer' in the model — not set here intentionally
+  const user = await User.create({ name, email, password });
 
-  const user = await User.create({ name, email, password, role: 'viewer' });
-
-  res.status(201).json(authResponse(user));
+  res.status(201).json({ message: 'User registered successfully', data: authResponse(user) });
 });
 
 const login = asyncHandler(async (req, res) => {
+  console.log('Login Request Body:', req.body);
   const { email, password } = req.body;
 
-  const user = await User.findOne({ email: email.toLowerCase().trim() }).select('+password');
+  // Explicitly select password since it's excluded from queries by default
+  const user = await User.findOne({ email }).select('+password');
+  console.log('User Lookup:', user ? `Found user: ${user.email}` : 'Not found');
+
   if (!user || !(await user.comparePassword(password))) {
+    // Only return 401 if user not found or password incorrect
     throw new ApiError(401, 'Invalid email or password');
   }
 
@@ -84,16 +70,12 @@ const login = asyncHandler(async (req, res) => {
     throw new ApiError(403, 'Account is inactive');
   }
 
-  res.json(authResponse(user));
+  res.json({ message: 'Login successful', data: authResponse(user) });
 });
 
+// req.user is attached by authenticateRequest middleware — no extra DB call needed
 const getMe = asyncHandler(async (req, res) => {
-  const user = await User.findById(req.user.id);
-  if (!user) {
-    throw new ApiError(404, 'User not found');
-  }
-
-  res.json(user);
+  res.json({ data: req.user });
 });
 
 module.exports = { register, login, getMe, registerValidation, loginValidation };

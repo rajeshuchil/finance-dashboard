@@ -7,7 +7,7 @@ const router = express.Router();
 router.use(authenticateRequest);
 
 router.get('/totals', requireViewerOrAbove, getTotals);
-router.get('/summary', requireAnalystOrAdmin, getSummary);
-router.get('/categories', requireAnalystOrAdmin, getCategoryBreakdown);
+router.get('/summary', requireViewerOrAbove, getSummary);
+router.get('/categories', requireViewerOrAbove, getCategoryBreakdown);
 
 module.exports = router;

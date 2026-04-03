@@ -1,112 +1,71 @@
 const Record = require('../models/Record');
-const ApiError = require('../utils/ApiError');
 const asyncHandler = require('../utils/asyncHandler');
+const ApiError = require('../utils/ApiError');
 
 const BASE_MATCH = { isDeleted: false };
 
 const normalizeTotals = (rows) => {
-  let income = 0;
-  let expenses = 0;
-  let incomeCount = 0;
-  let expenseCount = 0;
+  let income = 0, expenses = 0, incomeCount = 0, expenseCount = 0;
 
   rows.forEach((row) => {
-    if (row._id === 'income') {
-      income = row.total;
-      incomeCount = row.count;
-    }
-    if (row._id === 'expense') {
-      expenses = row.total;
-      expenseCount = row.count;
-    }
+    if (row._id === 'income') { income = row.total; incomeCount = row.count; }
+    if (row._id === 'expense') { expenses = row.total; expenseCount = row.count; }
   });
 
-  return {
-    income,
-    expenses,
-    balance: income - expenses,
-    transactionCount: incomeCount + expenseCount
-  };
+  return { income, expenses, balance: income - expenses, transactionCount: incomeCount + expenseCount };
 };
 
 const groupCategoriesByType = (rows) => {
-  return rows.reduce(
-    (acc, row) => {
-      const type = row.type;
-      if (!acc[type]) {
-        acc[type] = [];
-      }
-
-      acc[type].push({
-        category: row.category,
-        total: row.total,
-        count: row.count
-      });
-
-      return acc;
-    },
-    { income: [], expense: [] }
-  );
+  return rows.reduce((acc, row) => {
+    if (!acc[row.type]) acc[row.type] = [];
+    acc[row.type].push({ category: row.category, total: row.total, count: row.count });
+    return acc;
+  }, { income: [], expense: [] });
 };
 
-const aggregateTotals = async () => {
-  return Record.aggregate([
-    { $match: BASE_MATCH },
-    { $group: { _id: '$type', total: { $sum: '$amount' }, count: { $sum: 1 } } }
-  ]);
-};
+const aggregateTotals = () => Record.aggregate([
+  { $match: BASE_MATCH },
+  { $group: { _id: '$type', total: { $sum: '$amount' }, count: { $sum: 1 } } }
+]);
 
-const aggregateCategories = async (type) => {
+const aggregateCategories = (type) => {
   const match = type ? { ...BASE_MATCH, type } : BASE_MATCH;
-
   return Record.aggregate([
     { $match: match },
-    {
-      $group: {
-        _id: { type: '$type', category: '$category' },
-        total: { $sum: '$amount' },
-        count: { $sum: 1 }
-      }
-    },
-    {
-      $project: {
-        _id: 0,
-        type: '$_id.type',
-        category: '$_id.category',
-        total: 1,
-        count: 1
-      }
-    },
-    { $sort: { type: 1, total: -1, category: 1 } }
+    { $group: { _id: { type: '$type', category: '$category' }, total: { $sum: '$amount' }, count: { $sum: 1 } } },
+    { $project: { _id: 0, type: '$_id.type', category: '$_id.category', total: 1, count: 1 } },
+    { $sort: { type: 1, total: -1 } }
   ]);
 };
 
-const aggregateMonthly = async () => {
+/**
+ * Groups data by calendar month for the last 12 months.
+ * We anchor the range to the start of the current month to avoid partial-month gaps
+ * and filter to a fixed 12-month window before aggregating.
+ */
+const aggregateMonthly = () => {
+  const now = new Date();
+  const endOfThisMonth = new Date(now.getFullYear(), now.getMonth() + 1, 1); // exclusive upper bound
+  const startOf12MonthsAgo = new Date(now.getFullYear(), now.getMonth() - 11, 1); // 12 calendar months back
+
   return Record.aggregate([
-    { $match: BASE_MATCH },
+    {
+      $match: {
+        ...BASE_MATCH,
+        date: { $gte: startOf12MonthsAgo, $lt: endOfThisMonth }
+      }
+    },
     {
       $group: {
-        _id: {
-          year: { $year: '$date' },
-          month: { $month: '$date' },
-          type: '$type'
-        },
+        _id: { year: { $year: '$date' }, month: { $month: '$date' }, type: '$type' },
         total: { $sum: '$amount' }
       }
     },
     {
       $group: {
         _id: { year: '$_id.year', month: '$_id.month' },
-        income: {
-          $sum: {
-            $cond: [{ $eq: ['$_id.type', 'income'] }, '$total', 0]
-          }
-        },
-        expenses: {
-          $sum: {
-            $cond: [{ $eq: ['$_id.type', 'expense'] }, '$total', 0]
-          }
-        }
+        income: { $sum: { $cond: [{ $eq: ['$_id.type', 'income'] }, '$total', 0] } },
+        expenses: { $sum: { $cond: [{ $eq: ['$_id.type', 'expense'] }, '$total', 0] } }
       }
     },
     {
@@ -119,8 +78,7 @@ const aggregateMonthly = async () => {
         balance: { $subtract: ['$income', '$expenses'] }
       }
     },
-    { $sort: { year: -1, month: -1 } },
-    { $limit: 12 }
+    { $sort: { year: -1, month: -1 } }
   ]);
 };
 
@@ -132,21 +90,19 @@ const getSummary = asyncHandler(async (req, res) => {
     aggregateMonthly()
   ]);
 
-  const totals = normalizeTotals(totalRows);
-  const categories = groupCategoriesByType(categoryRows);
-
   res.json({
-    ...totals,
-    categories,
-    recent: recent || [],
-    monthly: monthly || []
+    data: {
+      ...normalizeTotals(totalRows),
+      categories: groupCategoriesByType(categoryRows),
+      recent: recent || [],
+      monthly: monthly || []
+    }
   });
 });
 
 const getTotals = asyncHandler(async (req, res) => {
-  const totalRows = await aggregateTotals();
-  const totals = normalizeTotals(totalRows);
-  res.json(totals);
+  const rows = await aggregateTotals();
+  res.json({ data: normalizeTotals(rows) });
 });
 
 const getCategoryBreakdown = asyncHandler(async (req, res) => {
@@ -159,11 +115,7 @@ const getCategoryBreakdown = asyncHandler(async (req, res) => {
   const rows = await aggregateCategories(type);
   const grouped = groupCategoriesByType(rows);
 
-  if (type) {
-    return res.json({ type, categories: grouped[type] || [] });
-  }
-
-  res.json(grouped);
+  res.json({ data: type ? { type, categories: grouped[type] || [] } : grouped });
 });
 
 module.exports = { getSummary, getTotals, getCategoryBreakdown };

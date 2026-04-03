@@ -9,19 +9,15 @@ const ALLOWED_STATUS = User.schema.path('status').enumValues;
 const updateRoleValidation = [
   param('id').isMongoId().withMessage('Invalid user id'),
   body('role')
-    .notEmpty()
-    .withMessage('Role is required')
-    .isIn(ALLOWED_ROLES)
-    .withMessage(`Role must be one of: ${ALLOWED_ROLES.join(', ')}`)
+    .notEmpty().withMessage('Role is required')
+    .isIn(ALLOWED_ROLES).withMessage(`Role must be one of: ${ALLOWED_ROLES.join(', ')}`)
 ];
 
 const updateStatusValidation = [
   param('id').isMongoId().withMessage('Invalid user id'),
   body('status')
-    .notEmpty()
-    .withMessage('Status is required')
-    .isIn(ALLOWED_STATUS)
-    .withMessage(`Status must be one of: ${ALLOWED_STATUS.join(', ')}`)
+    .notEmpty().withMessage('Status is required')
+    .isIn(ALLOWED_STATUS).withMessage(`Status must be one of: ${ALLOWED_STATUS.join(', ')}`)
 ];
 
 const getAllUsers = asyncHandler(async (req, res) => {
@@ -32,13 +28,13 @@ const getAllUsers = asyncHandler(async (req, res) => {
   const query = {};
   if (role) {
     if (!ALLOWED_ROLES.includes(role)) {
-      throw new ApiError(400, `Invalid role filter. Allowed values: ${ALLOWED_ROLES.join(', ')}`);
+      throw new ApiError(400, `Invalid role filter. Allowed: ${ALLOWED_ROLES.join(', ')}`);
     }
     query.role = role;
   }
   if (status) {
     if (!ALLOWED_STATUS.includes(status)) {
-      throw new ApiError(400, `Invalid status filter. Allowed values: ${ALLOWED_STATUS.join(', ')}`);
+      throw new ApiError(400, `Invalid status filter. Allowed: ${ALLOWED_STATUS.join(', ')}`);
     }
     query.status = status;
   }
@@ -51,20 +47,20 @@ const getAllUsers = asyncHandler(async (req, res) => {
   ]);
 
   res.json({
-    total,
-    page: parsedPage,
-    pages: Math.ceil(total / parsedLimit),
-    users
+    data: users,
+    meta: {
+      total,
+      page: parsedPage,
+      limit: parsedLimit,
+      pages: Math.ceil(total / parsedLimit)
+    }
   });
 });
 
 const getUserById = asyncHandler(async (req, res) => {
   const user = await User.findById(req.params.id);
-  if (!user) {
-    throw new ApiError(404, 'User not found');
-  }
-
-  res.json(user);
+  if (!user) throw new ApiError(404, 'User not found');
+  res.json({ data: user });
 });
 
 const updateRole = asyncHandler(async (req, res) => {
@@ -77,12 +73,9 @@ const updateRole = asyncHandler(async (req, res) => {
     { role: req.body.role },
     { new: true, runValidators: true }
   );
+  if (!user) throw new ApiError(404, 'User not found');
 
-  if (!user) {
-    throw new ApiError(404, 'User not found');
-  }
-
-  res.json(user);
+  res.json({ data: user });
 });
 
 const updateStatus = asyncHandler(async (req, res) => {
@@ -95,12 +88,9 @@ const updateStatus = asyncHandler(async (req, res) => {
     { status: req.body.status },
     { new: true, runValidators: true }
   );
+  if (!user) throw new ApiError(404, 'User not found');
 
-  if (!user) {
-    throw new ApiError(404, 'User not found');
-  }
-
-  res.json(user);
+  res.json({ data: user });
 });
 
 module.exports = {
