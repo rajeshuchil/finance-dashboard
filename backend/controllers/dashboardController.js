@@ -1,75 +1,156 @@
 const Record = require('../models/Record');
+const ApiError = require('../utils/ApiError');
 
-/**
- * Executes a high-performance multi-pipeline aggregation to generate the full dashboard summary.
- * We use Promise.all to run all aggregations concurrently rather than sequentially.
- */
+const BASE_MATCH = { isDeleted: false };
+
+const normalizeTotals = (rows) => {
+  let income = 0;
+  let expenses = 0;
+  let incomeCount = 0;
+  let expenseCount = 0;
+
+  rows.forEach((row) => {
+    if (row._id === 'income') {
+      income = row.total;
+      incomeCount = row.count;
+    }
+    if (row._id === 'expense') {
+      expenses = row.total;
+      expenseCount = row.count;
+    }
+  });
+
+  return {
+    income,
+    expenses,
+    balance: income - expenses,
+    transactionCount: incomeCount + expenseCount
+  };
+};
+
+const groupCategoriesByType = (rows) => {
+  return rows.reduce(
+    (acc, row) => {
+      const type = row.type;
+      if (!acc[type]) {
+        acc[type] = [];
+      }
+
+      acc[type].push({
+        category: row.category,
+        total: row.total,
+        count: row.count
+      });
+
+      return acc;
+    },
+    { income: [], expense: [] }
+  );
+};
+
+const aggregateTotals = async () => {
+  return Record.aggregate([
+    { $match: BASE_MATCH },
+    { $group: { _id: '$type', total: { $sum: '$amount' }, count: { $sum: 1 } } }
+  ]);
+};
+
+const aggregateCategories = async (type) => {
+  const match = type ? { ...BASE_MATCH, type } : BASE_MATCH;
+
+  return Record.aggregate([
+    { $match: match },
+    {
+      $group: {
+        _id: { type: '$type', category: '$category' },
+        total: { $sum: '$amount' },
+        count: { $sum: 1 }
+      }
+    },
+    {
+      $project: {
+        _id: 0,
+        type: '$_id.type',
+        category: '$_id.category',
+        total: 1,
+        count: 1
+      }
+    },
+    { $sort: { type: 1, total: -1, category: 1 } }
+  ]);
+};
+
+const aggregateMonthly = async () => {
+  return Record.aggregate([
+    { $match: BASE_MATCH },
+    {
+      $group: {
+        _id: {
+          year: { $year: '$date' },
+          month: { $month: '$date' },
+          type: '$type'
+        },
+        total: { $sum: '$amount' }
+      }
+    },
+    {
+      $group: {
+        _id: { year: '$_id.year', month: '$_id.month' },
+        income: {
+          $sum: {
+            $cond: [{ $eq: ['$_id.type', 'income'] }, '$total', 0]
+          }
+        },
+        expenses: {
+          $sum: {
+            $cond: [{ $eq: ['$_id.type', 'expense'] }, '$total', 0]
+          }
+        }
+      }
+    },
+    {
+      $project: {
+        _id: 0,
+        year: '$_id.year',
+        month: '$_id.month',
+        income: 1,
+        expenses: 1,
+        balance: { $subtract: ['$income', '$expenses'] }
+      }
+    },
+    { $sort: { year: -1, month: -1 } },
+    { $limit: 12 }
+  ]);
+};
+
 const getSummary = async (req, res, next) => {
   try {
-    const [totals, categories, recent, monthly] = await Promise.all([
-      // 1. Calculate overall income vs expenses
-      Record.aggregate([
-        { $match: { isDeleted: false } },
-        { $group: { _id: '$type', total: { $sum: '$amount' } } }
-      ]),
-      
-      // 2. Breakdown totals by individual categories, grouped by income/expense type
-      Record.aggregate([
-        { $match: { isDeleted: false } },
-        { $group: { _id: { type: '$type', category: '$category' }, total: { $sum: '$amount' }, count: { $sum: 1 } } },
-        { $group: { _id: '$_id.type', categories: { $push: { category: '$_id.category', total: '$total', count: '$count' } } } }
-      ]),
-      
-      // 3. Fetch the 5 most recent transactions
-      Record.find({ isDeleted: false }).sort({ date: -1 }).limit(5).populate('createdBy', 'name'),
-      
-      // 4. Group totals incrementally by calendar month and year for trend charts
-      Record.aggregate([
-        { $match: { isDeleted: false } },
-        { $group: { _id: { year: { $year: '$date' }, month: { $month: '$date' }, type: '$type' }, total: { $sum: '$amount' } } },
-        { $group: { _id: { year: '$_id.year', month: '$_id.month' }, breakdown: { $push: { type: '$_id.type', total: '$total' } } } },
-        { $sort: { '_id.year': -1, '_id.month': -1 } },
-        { $limit: 12 }
-      ])
+    const [totalRows, categoryRows, recent, monthly] = await Promise.all([
+      aggregateTotals(),
+      aggregateCategories(),
+      Record.find(BASE_MATCH).sort({ date: -1 }).limit(5).populate('createdBy', 'name'),
+      aggregateMonthly()
     ]);
 
-    // Flatten the totals array into simple primitives for the frontend
-    let income = 0;
-    let expenses = 0;
-    totals.forEach(t => {
-      if (t._id === 'income') income = t.total;
-      if (t._id === 'expense') expenses = t.total;
-    });
+    const totals = normalizeTotals(totalRows);
+    const categories = groupCategoriesByType(categoryRows);
 
     res.json({
-      balance: income - expenses,
-      income,
-      expenses,
+      ...totals,
       categories,
-      recent,
-      monthly
+      recent: recent || [],
+      monthly: monthly || []
     });
   } catch (err) {
-    next(err); // Forward to global errorHandler middleware
+    next(err);
   }
 };
 
 const getTotals = async (req, res, next) => {
   try {
-    const totals = await Record.aggregate([
-      { $match: { isDeleted: false } },
-      { $group: { _id: '$type', total: { $sum: '$amount' }, count: { $sum: 1 } } }
-    ]);
-
-    let income = 0;
-    let expenses = 0;
-    
-    totals.forEach(t => {
-      if (t._id === 'income') income = t.total;
-      if (t._id === 'expense') expenses = t.total;
-    });
-
-    res.json({ income, expenses, balance: income - expenses });
+    const totalRows = await aggregateTotals();
+    const totals = normalizeTotals(totalRows);
+    res.json(totals);
   } catch (err) {
     next(err);
   }
@@ -77,18 +158,20 @@ const getTotals = async (req, res, next) => {
 
 const getCategoryBreakdown = async (req, res, next) => {
   try {
-    const match = { isDeleted: false };
-    
-    // Allow optional filtering by transaction type (income/expense)
-    if (req.query.type) match.type = req.query.type;
+    const { type } = req.query;
 
-    const categories = await Record.aggregate([
-      { $match: match },
-      { $group: { _id: { type: '$type', category: '$category' }, total: { $sum: '$amount' }, count: { $sum: 1 } } },
-      { $sort: { total: -1 } }
-    ]);
+    if (type && !['income', 'expense'].includes(type)) {
+      throw new ApiError(400, 'type must be one of: income, expense');
+    }
 
-    res.json(categories);
+    const rows = await aggregateCategories(type);
+    const grouped = groupCategoriesByType(rows);
+
+    if (type) {
+      return res.json({ type, categories: grouped[type] || [] });
+    }
+
+    res.json(grouped);
   } catch (err) {
     next(err);
   }
