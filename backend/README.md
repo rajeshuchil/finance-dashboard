@@ -4,6 +4,34 @@ A secure REST API backend for managing financial records with role-based access 
 
 ---
 
+## Demo Credentials
+
+To quickly test all features without manual database setup:
+
+**Seed the admin user first:**
+```bash
+npm run seed:admin
+```
+
+| Role | Email | Password |
+|------|-------|----------|
+| Admin | admin@test.com | Admin@123 |
+| Viewer | Register normally via `/api/auth/register` | — |
+
+> The Admin role has full access to all endpoints including user management. Viewers can read records and dashboard data.
+
+---
+
+## Seed Sample Data (Optional)
+
+To populate the database with 75 realistic financial records for a richer demo experience:
+
+```bash
+npm run seed:data
+```
+
+---
+
 ## Project Overview
 
 This backend supports:
