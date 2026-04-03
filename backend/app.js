@@ -19,7 +19,10 @@ connectDB();
 app.use(helmet());
 
 // Proper CORS Configuration
-const allowedOrigins = ['http://localhost:5173'];
+const allowedOrigins = [
+  'http://localhost:5173',
+  'https://finance-dashboard-five-sage.vercel.app'
+];
 const corsOptions = {
   origin: (origin, callback) => {
     // Allow requests with no origin (like Postman, curl, or direct browser access)
