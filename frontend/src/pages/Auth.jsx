@@ -22,7 +22,9 @@ export default function Auth({ onAuthSuccess }) {
       }
       
       const token = res.data.data.token;
+      const user = res.data.data.user;
       localStorage.setItem('token', token);
+      localStorage.setItem('user', JSON.stringify(user));
       onAuthSuccess();
     } catch (err) {
       setError(err.response?.data?.error || `Failed to ${mode}`);

@@ -1,4 +1,5 @@
 import { NavLink } from 'react-router-dom';
+import SidebarUser from './SidebarUser';
 import './Sidebar.css';
 
 const navItems = [
@@ -10,24 +11,26 @@ const navItems = [
 export default function Sidebar() {
   return (
     <aside className="sidebar">
-      <div className="sidebar-brand">
-        <span className="brand-icon">₹</span>
-        <span className="brand-name">FinanceApp</span>
+      <div className="sidebar-top">
+        <div className="sidebar-brand">
+          <span className="brand-icon">₹</span>
+          <span className="brand-name">FinanceApp</span>
+        </div>
+        <nav className="sidebar-nav">
+          {navItems.map(({ to, label, icon }) => (
+            <NavLink
+              key={to}
+              to={to}
+              end={to === '/'}
+              className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}
+            >
+              <span className="nav-icon">{icon}</span>
+              <span>{label}</span>
+            </NavLink>
+          ))}
+        </nav>
       </div>
-      <nav className="sidebar-nav">
-        {navItems.map(({ to, label, icon }) => (
-          <NavLink
-            key={to}
-            to={to}
-            end={to === '/'}
-            className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}
-          >
-            <span className="nav-icon">{icon}</span>
-            <span>{label}</span>
-          </NavLink>
-        ))}
-      </nav>
-      <div className="sidebar-footer">Finance Dashboard v1.0</div>
+      <SidebarUser />
     </aside>
   );
 }

@@ -1,10 +1,11 @@
 .sidebar {
   width: 220px;
-  min-height: 100vh;
+  height: 100vh;
   background: #fff;
   border-right: 1px solid #e8edf2;
   display: flex;
   flex-direction: column;
+  justify-content: space-between;
   position: fixed;
   top: 0;
   left: 0;
@@ -28,24 +29,24 @@
 
 .brand-name {
   font-size: 16px;
-  font-weight: 700;
+  font-weight: 800;
   color: #1a1f36;
-  letter-spacing: -0.3px;
+  letter-spacing: -0.4px;
 }
 
 .sidebar-nav {
   display: flex;
   flex-direction: column;
-  padding: 16px 10px;
-  gap: 2px;
+  padding: 16px 12px;
+  gap: 4px;
   flex: 1;
 }
 
 .nav-item {
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 9px 12px;
+  gap: 12px;
+  padding: 10px 14px;
   border-radius: 8px;
   text-decoration: none;
   color: #697386;
