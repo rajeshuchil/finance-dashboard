@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
 import TransactionTable from '../components/TransactionTable';
 import Spinner from '../components/Spinner';
 import { useFetch } from '../hooks/useFetch';
@@ -6,16 +6,46 @@ import { getRecords, createRecord } from '../api/client';
 import './Records.css';
 
 const INITIAL_FORM = { amount: '', type: 'income', category: '', date: '', notes: '' };
+const INITIAL_FILTERS = { type: '', category: '', startDate: '', endDate: '' };
 
 export default function Records() {
   const [form, setForm] = useState(INITIAL_FORM);
   const [submitting, setSubmitting] = useState(false);
   const [formError, setFormError] = useState('');
   const [refreshKey, setRefreshKey] = useState(0);
+  const [filters, setFilters] = useState(INITIAL_FILTERS);
+  const [debouncedCategory, setDebouncedCategory] = useState('');
+  const debounceRef = useRef(null);
 
-  const fetcher = useCallback(() => getRecords({ limit: 50 }), [refreshKey]);
-  const { data, loading, error } = useFetch(fetcher, [refreshKey]);
+  // Debounce category input
+  useEffect(() => {
+    clearTimeout(debounceRef.current);
+    debounceRef.current = setTimeout(() => {
+      setDebouncedCategory(filters.category);
+    }, 300);
+  }, [filters.category]);
+
+  const fetcher = useCallback(() => {
+    const params = { limit: 100 };
+    if (filters.type) params.type = filters.type;
+    if (debouncedCategory) params.category = debouncedCategory;
+    if (filters.startDate) params.startDate = filters.startDate;
+    if (filters.endDate) params.endDate = filters.endDate;
+    return getRecords(params);
+  }, [refreshKey, filters.type, debouncedCategory, filters.startDate, filters.endDate]);
+
+  const { data, loading, error } = useFetch(fetcher, [fetcher]);
   const records = data?.data || [];
+
+  const handleFilterChange = (e) => {
+    setFilters((prev) => ({ ...prev, [e.target.name]: e.target.value }));
+  };
+
+  const resetFilters = () => {
+    setFilters(INITIAL_FILTERS);
+    setDebouncedCategory('');
+    setRefreshKey((k) => k + 1);
+  };
 
   const handleChange = (e) => {
     setForm((prev) => ({ ...prev, [e.target.name]: e.target.value }));
@@ -39,6 +69,8 @@ export default function Records() {
       setSubmitting(false);
     }
   };
+
+  const hasActiveFilters = Object.values(filters).some(Boolean);
 
   return (
     <div className="page">
@@ -85,8 +117,52 @@ export default function Records() {
       </div>
 
       <div className="section">
-        <h2 className="section-title">All Records</h2>
-        {loading ? <Spinner /> : error ? <p className="error-msg">{error}</p> : <TransactionTable records={records} />}
+        <div className="records-header">
+          <h2 className="section-title">All Records</h2>
+          {hasActiveFilters && (
+            <span className="filter-count">{records.length} result{records.length !== 1 ? 's' : ''}</span>
+          )}
+        </div>
+
+        <div className="filter-bar">
+          <div className="filter-group">
+            <label>Type</label>
+            <select name="type" value={filters.type} onChange={handleFilterChange}>
+              <option value="">All</option>
+              <option value="income">Income</option>
+              <option value="expense">Expense</option>
+            </select>
+          </div>
+          <div className="filter-group filter-group--grow">
+            <label>Category</label>
+            <input
+              type="text"
+              name="category"
+              value={filters.category}
+              onChange={handleFilterChange}
+              placeholder="Filter by category..."
+            />
+          </div>
+          <div className="filter-group">
+            <label>From</label>
+            <input type="date" name="startDate" value={filters.startDate} onChange={handleFilterChange} />
+          </div>
+          <div className="filter-group">
+            <label>To</label>
+            <input type="date" name="endDate" value={filters.endDate} onChange={handleFilterChange} />
+          </div>
+          {hasActiveFilters && (
+            <button className="btn-reset" onClick={resetFilters}>Reset</button>
+          )}
+        </div>
+
+        {loading ? (
+          <Spinner />
+        ) : error ? (
+          <p className="error-msg">{error}</p>
+        ) : (
+          <TransactionTable records={records} />
+        )}
       </div>
     </div>
   );

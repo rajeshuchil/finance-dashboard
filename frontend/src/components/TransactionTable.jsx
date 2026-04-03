@@ -32,7 +32,7 @@ export default function TransactionTable({ records = [], limit }) {
               <td>
                 <span className={`badge badge--${r.type}`}>{r.type}</span>
               </td>
-              <td className={`amount-col amount--${r.type}`}>{fmt(r.amount)}</td>
+              <td className={`amount-cell amount--${r.type}`}>{fmt(r.amount)}</td>
             </tr>
           ))}
         </tbody>

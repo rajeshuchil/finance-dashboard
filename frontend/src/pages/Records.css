@@ -2,6 +2,94 @@
   width: 100%;
 }
 
+/* ---- Records list header ---- */
+.records-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 16px;
+}
+
+.records-header .section-title { margin: 0; }
+
+.filter-count {
+  font-size: 12px;
+  font-weight: 600;
+  color: #635bff;
+  background: #f0efff;
+  padding: 4px 10px;
+  border-radius: 20px;
+}
+
+/* ---- Filter bar ---- */
+.filter-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: flex-end;
+  padding: 16px;
+  background: #f8fafc;
+  border: 1px solid #e8edf2;
+  border-radius: 10px;
+  margin-bottom: 20px;
+}
+
+.filter-group {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  min-width: 120px;
+}
+
+.filter-group--grow { flex: 1; }
+
+.filter-group label {
+  font-size: 11px;
+  font-weight: 600;
+  color: #8898aa;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+}
+
+.filter-group input,
+.filter-group select {
+  padding: 8px 10px;
+  border: 1px solid #dde3ea;
+  border-radius: 7px;
+  font-size: 13px;
+  color: #1a1f36;
+  background: #fff;
+  outline: none;
+  transition: border-color 0.15s;
+  height: 36px;
+}
+
+.filter-group input:focus,
+.filter-group select:focus {
+  border-color: #635bff;
+  box-shadow: 0 0 0 3px rgba(99, 91, 255, 0.08);
+}
+
+.btn-reset {
+  height: 36px;
+  padding: 0 16px;
+  background: #fff;
+  border: 1px solid #dde3ea;
+  border-radius: 7px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #697386;
+  cursor: pointer;
+  transition: all 0.15s;
+  align-self: flex-end;
+}
+
+.btn-reset:hover {
+  color: #df1b41;
+  border-color: #fecdd3;
+  background: #fff5f7;
+}
+
 .page-header {
   margin-bottom: 28px;
 }
