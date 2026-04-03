@@ -36,6 +36,7 @@ const errorHandler = (err, req, res, next) => {
 
   res.status(statusCode).json({
     error: message,
+    details: err.details,
     // Only leak stack traces when running locally
     stack: process.env.NODE_ENV === 'development' ? err.stack : undefined
   });

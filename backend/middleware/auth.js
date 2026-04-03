@@ -1,6 +1,7 @@
 const User = require('../models/User');
 const ApiError = require('../utils/ApiError');
 const { verifyToken } = require('../utils/jwt');
+const asyncHandler = require('../utils/asyncHandler');
 
 const ROLES = Object.freeze({
   VIEWER: 'viewer',
@@ -12,35 +13,31 @@ const ROLES = Object.freeze({
  * Protects routes by enforcing valid JWT authentication.
  * Attaches the authenticated user document to the `req` object on success.
  */
-const authenticateRequest = async (req, res, next) => {
-  try {
-    let token;
-    if (req.headers.authorization?.startsWith('Bearer ')) {
-      token = req.headers.authorization.split(' ')[1];
-    }
-
-    if (!token) {
-      throw new ApiError(401, 'Authentication token is required');
-    }
-
-    const decoded = verifyToken(token);
-    const userId = decoded.sub || decoded.id;
-    const user = await User.findById(userId);
-
-    if (!user) {
-      throw new ApiError(401, 'User not found for this token');
-    }
-
-    if (user.status === 'inactive') {
-      throw new ApiError(403, 'Account is inactive');
-    }
-
-    req.user = user;
-    next();
-  } catch (err) {
-    next(err);
+const authenticateRequest = asyncHandler(async (req, res, next) => {
+  let token;
+  if (req.headers.authorization?.startsWith('Bearer ')) {
+    token = req.headers.authorization.split(' ')[1];
   }
-};
+
+  if (!token) {
+    throw new ApiError(401, 'Authentication token is required');
+  }
+
+  const decoded = verifyToken(token);
+  const userId = decoded.sub || decoded.id;
+  const user = await User.findById(userId);
+
+  if (!user) {
+    throw new ApiError(401, 'User not found for this token');
+  }
+
+  if (user.status === 'inactive') {
+    throw new ApiError(403, 'Account is inactive');
+  }
+
+  req.user = user;
+  next();
+});
 
 /**
  * Role-based access control (RBAC) middleware.

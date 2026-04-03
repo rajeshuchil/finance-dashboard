@@ -1,6 +1,7 @@
 const { body, param, query } = require('express-validator');
 const Record = require('../models/Record');
 const ApiError = require('../utils/ApiError');
+const asyncHandler = require('../utils/asyncHandler');
 
 const ALLOWED_TYPES = ['income', 'expense'];
 const ALLOWED_SORT_ORDERS = ['asc', 'desc'];
@@ -147,81 +148,61 @@ const getRecordsValidation = [
     .withMessage(`sortOrder must be one of: ${ALLOWED_SORT_ORDERS.join(', ')}`)
 ];
 
-const createRecord = async (req, res, next) => {
-  try {
-    const record = await Record.create({
-      ...req.body,
-      createdBy: req.user.id
-    });
+const createRecord = asyncHandler(async (req, res) => {
+  const record = await Record.create({
+    ...req.body,
+    createdBy: req.user.id
+  });
 
-    return sendData(res, record, 201);
-  } catch (err) {
-    next(err);
+  return sendData(res, record, 201);
+});
+
+const getRecords = asyncHandler(async (req, res) => {
+  const { type, category, startDate, endDate } = req.query;
+
+  if (startDate && endDate && new Date(startDate) > new Date(endDate)) {
+    throw new ApiError(400, 'startDate cannot be greater than endDate');
   }
-};
 
-const getRecords = async (req, res, next) => {
-  try {
-    const { type, category, startDate, endDate } = req.query;
+  const filters = buildRecordFilters({ type, category, startDate, endDate });
+  const { page, limit, skip } = parsePagination(req.query);
+  const sort = parseSort(req.query);
 
-    if (startDate && endDate && new Date(startDate) > new Date(endDate)) {
-      throw new ApiError(400, 'startDate cannot be greater than endDate');
+  const [records, total] = await Promise.all([
+    Record.find(filters).populate('createdBy', 'name email').sort(sort).skip(skip).limit(limit),
+    Record.countDocuments(filters)
+  ]);
+
+  return sendData(res, {
+    records,
+    pagination: {
+      total,
+      page,
+      limit,
+      pages: Math.ceil(total / limit)
     }
+  });
+});
 
-    const filters = buildRecordFilters({ type, category, startDate, endDate });
-    const { page, limit, skip } = parsePagination(req.query);
-    const sort = parseSort(req.query);
+const getRecordById = asyncHandler(async (req, res) => {
+  const record = await Record.findById(req.params.id).populate('createdBy', 'name email');
+  return sendData(res, ensureRecordExists(record));
+});
 
-    const [records, total] = await Promise.all([
-      Record.find(filters).populate('createdBy', 'name email').sort(sort).skip(skip).limit(limit),
-      Record.countDocuments(filters)
-    ]);
+const updateRecord = asyncHandler(async (req, res) => {
+  const record = await Record.findByIdAndUpdate(req.params.id, req.body, { new: true, runValidators: true });
+  return sendData(res, ensureRecordExists(record));
+});
 
-    return sendData(res, {
-      records,
-      pagination: {
-        total,
-        page,
-        limit,
-        pages: Math.ceil(total / limit)
-      }
-    });
-  } catch (err) {
-    next(err);
-  }
-};
+const deleteRecord = asyncHandler(async (req, res) => {
+  const record = await Record.findByIdAndUpdate(req.params.id, { isDeleted: true }, { new: true });
+  ensureRecordExists(record);
 
-const getRecordById = async (req, res, next) => {
-  try {
-    const record = await Record.findById(req.params.id).populate('createdBy', 'name email');
-    return sendData(res, ensureRecordExists(record));
-  } catch (err) {
-    next(err);
-  }
-};
-
-const updateRecord = async (req, res, next) => {
-  try {
-    const record = await Record.findByIdAndUpdate(req.params.id, req.body, { new: true, runValidators: true });
-    return sendData(res, ensureRecordExists(record));
-  } catch (err) {
-    next(err);
-  }
-};
-
-const deleteRecord = async (req, res, next) => {
-  try {
-    const record = await Record.findByIdAndUpdate(req.params.id, { isDeleted: true }, { new: true });
-    ensureRecordExists(record);
-
-    return res.json({
-      message: 'Record deleted successfully',
-      data: { id: record._id }
-    });
-  } catch (err) {
-    next(err);
-  }
-};
+  return res.json({
+    message: 'Record deleted successfully',
+    data: { id: record._id }
+  });
+});
 
 module.exports = {
   createRecord,

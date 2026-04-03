@@ -2,6 +2,7 @@ const { body } = require('express-validator');
 const User = require('../models/User');
 const ApiError = require('../utils/ApiError');
 const { generateToken } = require('../utils/jwt');
+const asyncHandler = require('../utils/asyncHandler');
 
 const authResponse = (user) => {
   return {
@@ -58,54 +59,41 @@ const loginValidation = [
   body('password').notEmpty().withMessage('Password is required')
 ];
 
-const register = async (req, res, next) => {
-  try {
-    const { name, email, password } = req.body;
+const register = asyncHandler(async (req, res) => {
+  const { name, email, password } = req.body;
 
-    const existingUser = await User.findOne({ email });
-    if (existingUser) {
-      throw new ApiError(409, 'Email already in use');
-    }
-
-    const user = await User.create({ name, email, password, role: 'viewer' });
-
-    res.status(201).json(authResponse(user));
-  } catch (err) {
-    next(err);
+  const existingUser = await User.findOne({ email });
+  if (existingUser) {
+    throw new ApiError(409, 'Email already in use');
   }
-};
 
-const login = async (req, res, next) => {
-  try {
-    const { email, password } = req.body;
+  const user = await User.create({ name, email, password, role: 'viewer' });
 
-    // Explicitly select the password field since it's hidden by default in the model
-    const user = await User.findOne({ email: email.toLowerCase().trim() }).select('+password');
-    if (!user || !(await user.comparePassword(password))) {
-      throw new ApiError(401, 'Invalid email or password');
-    }
+  res.status(201).json(authResponse(user));
+});
 
-    if (user.status === 'inactive') {
-      throw new ApiError(403, 'Account is inactive');
-    }
+const login = asyncHandler(async (req, res) => {
+  const { email, password } = req.body;
 
-    res.json(authResponse(user));
-  } catch (err) {
-    next(err);
+  const user = await User.findOne({ email: email.toLowerCase().trim() }).select('+password');
+  if (!user || !(await user.comparePassword(password))) {
+    throw new ApiError(401, 'Invalid email or password');
   }
-};
 
-const getMe = async (req, res, next) => {
-  try {
-    const user = await User.findById(req.user.id);
-    if (!user) {
-      throw new ApiError(404, 'User not found');
-    }
-
-    res.json(user);
-  } catch (err) {
-    next(err);
+  if (user.status === 'inactive') {
+    throw new ApiError(403, 'Account is inactive');
   }
-};
+
+  res.json(authResponse(user));
+});
+
+const getMe = asyncHandler(async (req, res) => {
+  const user = await User.findById(req.user.id);
+  if (!user) {
+    throw new ApiError(404, 'User not found');
+  }
+
+  res.json(user);
+});
 
 module.exports = { register, login, getMe, registerValidation, loginValidation };

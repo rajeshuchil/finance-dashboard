@@ -1,5 +1,6 @@
 const Record = require('../models/Record');
 const ApiError = require('../utils/ApiError');
+const asyncHandler = require('../utils/asyncHandler');
 
 const BASE_MATCH = { isDeleted: false };
 
@@ -123,58 +124,46 @@ const aggregateMonthly = async () => {
   ]);
 };
 
-const getSummary = async (req, res, next) => {
-  try {
-    const [totalRows, categoryRows, recent, monthly] = await Promise.all([
-      aggregateTotals(),
-      aggregateCategories(),
-      Record.find(BASE_MATCH).sort({ date: -1 }).limit(5).populate('createdBy', 'name'),
-      aggregateMonthly()
-    ]);
+const getSummary = asyncHandler(async (req, res) => {
+  const [totalRows, categoryRows, recent, monthly] = await Promise.all([
+    aggregateTotals(),
+    aggregateCategories(),
+    Record.find(BASE_MATCH).sort({ date: -1 }).limit(5).populate('createdBy', 'name'),
+    aggregateMonthly()
+  ]);
 
-    const totals = normalizeTotals(totalRows);
-    const categories = groupCategoriesByType(categoryRows);
+  const totals = normalizeTotals(totalRows);
+  const categories = groupCategoriesByType(categoryRows);
 
-    res.json({
-      ...totals,
-      categories,
-      recent: recent || [],
-      monthly: monthly || []
-    });
-  } catch (err) {
-    next(err);
+  res.json({
+    ...totals,
+    categories,
+    recent: recent || [],
+    monthly: monthly || []
+  });
+});
+
+const getTotals = asyncHandler(async (req, res) => {
+  const totalRows = await aggregateTotals();
+  const totals = normalizeTotals(totalRows);
+  res.json(totals);
+});
+
+const getCategoryBreakdown = asyncHandler(async (req, res) => {
+  const { type } = req.query;
+
+  if (type && !['income', 'expense'].includes(type)) {
+    throw new ApiError(400, 'type must be one of: income, expense');
   }
-};
 
-const getTotals = async (req, res, next) => {
-  try {
-    const totalRows = await aggregateTotals();
-    const totals = normalizeTotals(totalRows);
-    res.json(totals);
-  } catch (err) {
-    next(err);
+  const rows = await aggregateCategories(type);
+  const grouped = groupCategoriesByType(rows);
+
+  if (type) {
+    return res.json({ type, categories: grouped[type] || [] });
   }
-};
 
-const getCategoryBreakdown = async (req, res, next) => {
-  try {
-    const { type } = req.query;
-
-    if (type && !['income', 'expense'].includes(type)) {
-      throw new ApiError(400, 'type must be one of: income, expense');
-    }
-
-    const rows = await aggregateCategories(type);
-    const grouped = groupCategoriesByType(rows);
-
-    if (type) {
-      return res.json({ type, categories: grouped[type] || [] });
-    }
-
-    res.json(grouped);
-  } catch (err) {
-    next(err);
-  }
-};
+  res.json(grouped);
+});
 
 module.exports = { getSummary, getTotals, getCategoryBreakdown };

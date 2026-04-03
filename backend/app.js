@@ -4,6 +4,7 @@ const morgan = require('morgan');
 const rateLimit = require('express-rate-limit');
 const connectDB = require('./config/db');
 const errorHandler = require('./middleware/errorHandler');
+const ApiError = require('./utils/ApiError');
 
 const authRoutes = require('./routes/authRoutes');
 const userRoutes = require('./routes/userRoutes');
@@ -35,8 +36,8 @@ app.use('/api/records', recordRoutes);
 app.use('/api/dashboard', dashboardRoutes);
 
 // Catch-all route to handle requests for missing endpoints
-app.use((req, res) => {
-  res.status(404).json({ error: 'Not found' });
+app.use((req, res, next) => {
+  next(new ApiError(404, 'Not found'));
 });
 
 // Any errors passed sequentially to next(err) will end up here
