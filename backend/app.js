@@ -28,9 +28,11 @@ const corsOptions = {
     // Allow requests with no origin (like Postman, curl, or direct browser access)
     if (!origin) return callback(null, true);
 
-    if (allowedOrigins.includes(origin)) {
+    // Allow explicitly listed origins OR any Vercel deployment preview URL
+    if (allowedOrigins.includes(origin) || origin.endsWith('.vercel.app')) {
       callback(null, true);
     } else {
+      // Passes the error down to your centralized errorHandler gracefully
       callback(new ApiError(403, 'Not allowed by CORS'));
     }
   },
